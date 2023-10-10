@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <time.h>
 #include <uC++.h>
 
 #include <cmath>
@@ -9,7 +10,7 @@
 #include <vector>
 using namespace std;
 const double speed_of_light = 2.998 * 1e8;
-
+// n° lineas: 3196373
 _Cormonitor FileReader {
  public:
   FileReader(string & filename, int chunkSize) : chunk(chunkSize) {
@@ -23,9 +24,10 @@ _Cormonitor FileReader {
       cerr << "Error al abrir el archivo: " << file << endl;
     }
     if (fwrite(vc.data(), sizeof(double), size, outputFile) == size) {
-      cout << "All elements were written successfully" << endl;
+      cout << "All elements were written successfully in " << file << endl;
     } else {
-      cout << "There was an error while writing the elements" << endl;
+      cout << "There was an error while writing the elements in " << file
+           << endl;
     }
     fclose(outputFile);
   }
@@ -33,7 +35,7 @@ _Cormonitor FileReader {
     resume();
     return vtr;
   }
-
+  int n_line = 0;
   bool is_done() { return file.eof(); }
 
   void clean_vtr() { vtr.clear(); }
@@ -52,7 +54,10 @@ _Cormonitor FileReader {
           break;
         } else {
           vtr.push_back(line);
-          cout << "read" << endl;
+          if (n_line % 1000 == 0) {
+            cout << "Line\t" << line << endl;
+          }
+          n_line += 1;
         }
       }
       suspend();
@@ -64,7 +69,7 @@ _Task MyTask {
  public:
   MyTask(int id, int N, double deltaX, FileReader& reader)
       : id(id), N(N), deltaX(deltaX), reader(reader) {
-    fr.resize(N * N, 2);
+    fr.resize(N * N, 0);
     fi.resize(N * N, 0);
     wt.resize(N * N, 0);
   }
@@ -79,7 +84,7 @@ _Task MyTask {
   vector<string> vc;
 
  private:
-  double deg_to_rad(double deg) { return deg * (M_PI / 180); }
+  double arc_sec_to_rad(double deg) { return deg * M_PI / (180 * 3600); }
 
   vector<double> str_to_vec(string str) {
     stringstream ss(str);
@@ -93,10 +98,14 @@ _Task MyTask {
   }
 
   void main() {
+    double time;
+    cout << "Start Task(" << id << ")" << endl;
     while (!reader.is_done()) {
+      if (reader.n_line % 1000 == 0) {
+        cout << "Task:\t" << id << "\tLine:\t" << reader.n_line;
+      }
       vc = reader.next();
       vector<double> vis;  // string vector
-      cout << "Task(" << id << ")" << endl;
       for (int i = 0; i < vc.size(); i++) {
         vis = str_to_vec(vc[i]);  // double vector
         double uk, vk, vr, vi, wk, f, deltaU, deltaV, ik, jk;
@@ -108,26 +117,29 @@ _Task MyTask {
         wk = vis[5];
         f = vis[6];
         spc = vis[7];
-        deltaU = 1 / (N * deg_to_rad(deltaX));  // to radians
-        deltaU = deltaU * f / speed_of_light;   // to wave longitude
+        deltaU = 1 / (N * arc_sec_to_rad(deltaX));  // to radians
+        deltaU = deltaU * (f / speed_of_light);     // to wave longitude
         deltaV = deltaU;  // asuming deltav is equals to deltau
         ik = round((uk / deltaU) + (N / 2));
         jk = round((vk / deltaV) + (N / 2));
-        cout << "uk: " << uk << " vk: " << vk << " vr: " << vr << " vi: " << vi
-             << " wk: " << wk << " | ik(" << ik << ") jk(" << jk << ")" << endl;
+        // cout << "uk: " << uk << " vk: " << vk << " vr: " << vr << " vi: " <<
+        // vi
+        //      << " wk: " << wk << " | ik(" << ik << ") jk(" << jk << ")" <<
+        //      endl;
         fr[ik * N + jk] = fr[ik * N + jk] + (wk * vr);
         fi[ik * N + jk] = fi[ik * N + jk] + (wk * vi);
         wt[ik * N + jk] = wt[ik * N + jk] + wk;
       }
       reader.vtr.clear();
     }
-    cout << "Fin Tarea(" << id << ")" << endl;
+    cout << "End Task(" << id << ")" << endl;
   }
 };
 int main(int argc, char* argv[]) {
   string input_file_name;
   string output_file_name;
-  double deltaX = 0.0;
+  double deltaX = 0.0, tp = 0.0, time;
+  unsigned t0, t1;
   int N = 0;
   int c = 0;
   int t = 0;
@@ -174,9 +186,13 @@ int main(int argc, char* argv[]) {
   FileReader reader(input_file_name, c);  // Comonitor object creation
   MyTask** tasks = new MyTask*[t];        // Array of tasks
 
+  t0 = clock();
   for (int i = 0; i < t; i++) {
     tasks[i] = new MyTask(i, N, deltaX, reader);  // Allocation
   }
+  t1 = clock();
+  time = double(t1 - t0) / CLOCKS_PER_SEC;
+  cout << "TIEMPO " << time << endl;
 
   fr = tasks[0]->fr;
   fi = tasks[0]->fi;
