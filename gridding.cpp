@@ -22,114 +22,152 @@ mientras MAS ALTO = MAS PRECISO multiplicar valor real * peso | valor imaginario
 #include <stdbool.h>
 #include <uC++.h>
 
+#include <cmath>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
-
 using namespace std;
+const double speed_of_light = 2.998 * 1e+8;
 
 _Cormonitor FileReader {
  public:
-  std::vector<string> vtr;
   FileReader(string & filename, int chunkSize) : chunk(chunkSize) {
     file.open(filename.c_str());
   }
+
   ~FileReader() { file.close(); }
-  std::vector<string> next() {
+
+  vector<string> next() {
     resume();
     return vtr;
   }
-  bool finish() { return fin; }
+
+  bool is_done() { return file.eof(); }
+
   void clean_vtr() { vtr.clear(); }
 
+  vector<string> vtr;
+
  private:
-  bool fin = false;
   ifstream file;
   int chunk;
 
   void main() {
-    cout << "INICIO CORRUTINA" << endl;
     string line;
-    while (true) {  // leer X chunk lines
-      suspend();
-      for (int i = 0; i < chunk; i++) {
+    while (true) {
+      for (int i = 0; i < chunk; i++) {  // Reading X lines of chunk
         if (!getline(file, line)) {
-          fin = true;
           break;
         } else {
           vtr.push_back(line);
-          cout << "FileReader(" << i << ") State " << vtr.size() << endl;
+          cout << "read" << endl;
         }
       }
+      suspend();
     }
   }
 };
 
 _Task MyTask {
  public:
-  MyTask(int taskId, FileReader& reader) : id(taskId), reader(reader) {}
-  bool end = false;
+  MyTask(int id, int N, double deltaX, FileReader& reader)
+      : id(id), N(N), deltaX(deltaX), reader(reader) {}
+
   int id;
+  int N;
+  double deltaX;
+  double** fr;
+  double** fi;
+  double** wt;
   FileReader& reader;
-  std::vector<string> vc;
+  vector<string> vc;
 
  private:
+  double deg_to_rad(double deg) { return deg * (M_PI / 180); }
+
+  vector<double> str_to_vec(string str) {
+    stringstream ss(str);
+    vector<double> vis;
+    while (ss.good()) {
+      string substr;
+      getline(ss, substr, ',');
+      vis.push_back(stod(substr));
+    }
+    return vis;
+  }
+
   void main() {
-    cout << "INICIO TAREA " << id << endl;
-    while (!reader.finish()) {
+    while (!reader.is_done()) {
       vc = reader.next();
-      cout << "TAMAÑO VECTOR " << (vc.size() == 0 ? "VACIO" : vc[0]) << endl;
-      // cout << "TAREA[" << vc.size() << " O.O" << id << "] ESTADO ARCHIVO["
-      //      << (reader.finish() == 1 ? "FINALIZADO]" : "EN CURSO]") << endl;
+      vector<double> vis;  // string vector
+      cout << "Task(" << id << ")" << endl;
+      for (int i = 0; i < vc.size(); i++) {
+        vis = str_to_vec(vc[i]);  // double vector
+        double uk, vk, vr, vi, w, f, deltaU, deltaV, ik, jk;
+        int spc;
+        uk = vis[0];
+        vk = vis[1];
+        vr = vis[3];
+        vi = vis[4];
+        w = vis[5];
+        f = vis[6];
+        spc = vis[7];
+        deltaU = 1 / (N * deg_to_rad(deltaX));  // to radians
+        deltaU = deltaU * f / speed_of_light;   // to wave longitude
+        deltaV = deltaU;  // asuming deltav is equals to deltau
+        ik = round((uk / deltaU) + (N / 2));
+        jk = round((vk / deltaV) + (N / 2));
+        cout << "uk: " << uk << " vk: " << vk << " vr: " << vr << " vi: " << vi
+             << " | ik(" << ik << ") jk(" << jk << ")" << endl;
+      }
       reader.vtr.clear();
     }
     cout << "Fin Tarea(" << id << ")" << endl;
   }
 };
 int main(int argc, char* argv[]) {
-  // Variables para almacenar los argumentos
-  string inputFileName;
-  string outputFileName;
-  double deltau = 0.0;
+  string input_file_name;
+  string output_file_name;
+  double deltaX = 0.0;
   int N = 0;
-  int chunkSize = 0;
+  int c = 0;
   int t = 0;
-
-  // Procesar los argumentos de línea de comandos utilizando getopt
   int option;
   while ((option = getopt(argc, argv, "i:o:d:N:c:t:")) != -1) {
     switch (option) {
       case 'i':
-        inputFileName = optarg;
+        input_file_name = optarg;
         break;
       case 'o':
-        outputFileName = optarg;
+        output_file_name = optarg;
         break;
       case 'd':
-        deltau = stod(optarg);
+        deltaX = stod(optarg);
         break;
       case 'N':
         N = stoi(optarg);
         break;
       case 'c':
-        chunkSize = stoi(optarg);
+        c = stoi(optarg);
         break;
       case 't':
         t = stoi(optarg);
         break;
       default:
         cerr << "Uso: " << argv[0]
-             << " -i input -o output -d deltau -N tamaño -c chunk -t tareas"
+             << " -i input -o output -d deltaX -N tamaño -c chunk -t "
+                "tareas"
              << endl;
         return 1;
     }
   }
-  cout << "Input File: " << inputFileName << endl;
-  cout << "Output File: " << outputFileName << endl;
-  cout << "Deltau: " << deltau << endl;
+  cout << "Input File: " << input_file_name << endl;
+  cout << "Output File: " << output_file_name << endl;
+  cout << "DeltaX: " << deltaX << endl;
   cout << "Image Size: " << N << endl;
-  cout << "Chunk Size: " << chunkSize << endl;
+  cout << "Chunk Size: " << c << endl;
   cout << "Number of Tasks: " << t << endl;
 
   float *fr, *fi, *wt;
@@ -137,18 +175,18 @@ int main(int argc, char* argv[]) {
   fi = new float[N * N];
   wt = new float[N * N];
 
-  FileReader reader(inputFileName, chunkSize);
+  FileReader reader(input_file_name, c);  // Comonitor object creation
+  MyTask** tasks = new MyTask*[t];        // Array of tasks
 
-  MyTask** tasks = new MyTask*[t];  // Arreglo de punteros a tareas
   for (int i = 0; i < t; i++) {
-    tasks[i] = new MyTask(i, reader);  // Crear una tarea y almacenarla
-  }
-  // Esperar a que todas las tareas terminen
-  for (int i = 0; i < t; i++) {
-    delete tasks[i];  // Liberar la memoria de las tareas
+    tasks[i] = new MyTask(i, N, deltaX, reader);  // Allocation
   }
 
-  delete[] tasks;  // Liberar el arreglo de tareas
+  for (int i = 0; i < t; i++) {
+    delete tasks[i];
+  }
+
+  delete[] tasks;
   delete[] fr;
   delete[] fi;
   delete[] wt;
