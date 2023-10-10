@@ -1,24 +1,3 @@
-/* Grideo
-Antenas miden señales de algun objeto muy lejado
-a medida que se va moviendo va leyendo, entrega valores complejos van
-produciendo datos en el plano [u,v] (de Fourier), muchas antenas que siguen el
-mismo objeto me dan puntos distintos. Cada punto se llama Visibilidad (emiten
-señales de radiofrecuencia). Hay que transformar a una imagen de intensidad
-(señal -> imagen)[Síntesis de imágenes] Cada visibilidad tiene puntos reales e
-imaginarios, por lo tanto si uno le aplica la inversa de Fourier debería obtener
-la imagen, pero esto no es así dado que hay mucho espacio y 0's Ademas estamos
-en el plano contínuo, no es una matriz, por lo que Gridding lo transforma a una
-matriz
-->Gridding<-
-plano continuo -> discreto(matriz cuadrada) donde en cada punto hay que sumar
-todos los que estan en una determinada vecindad 1- matriz parte real 2- matriz
-parte imaginaria 3- matriz compleja (a partir de 1 y 2) -> inversa
-fourier(imagen en intensidad) [abs (r), abs(i), abs()] .raw para ver la imagen
-cada visibilidad tmb tiene un PESO el cual mide la incertidumbre, es decir
-mientras MAS ALTO = MAS PRECISO multiplicar valor real * peso | valor imaginario
-* peso (normalización con los pesos)
-*/
-
 #include <stdbool.h>
 #include <uC++.h>
 
