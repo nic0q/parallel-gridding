@@ -29,55 +29,37 @@ mientras MAS ALTO = MAS PRECISO multiplicar valor real * peso | valor imaginario
 
 using namespace std;
 
-_Monitor FileMonitor {
- public:
-  FileMonitor() : reading(false) {}
-
-  void startRead() {
-    while (reading) {
-      cond.wait();
-    }
-    reading = true;
-  }
-  void endRead() {
-    reading = false;
-    cond.signal();
-  }
-
- private:
-  bool reading;
-  uCondition cond;
-};
-
 _Cormonitor FileReader {
  public:
-  FileReader(const string& filename, int chunkSize) : chunk(chunkSize) {
+  std::vector<string> vtr;
+  FileReader(string & filename, int chunkSize) : chunk(chunkSize) {
     file.open(filename.c_str());
   }
   ~FileReader() { file.close(); }
-  bool isDone() { return fin; }
-  bool next() {
+  std::vector<string> next() {
     resume();
-    return fin;
+    return vtr;
   }
+  bool finish() { return fin; }
+  void clean_vtr() { vtr.clear(); }
 
  private:
   bool fin = false;
   ifstream file;
   int chunk;
+
   void main() {
     cout << "INICIO CORRUTINA" << endl;
     string line;
     while (true) {  // leer X chunk lines
       suspend();
-      for (int i = 0; i < 3; i++) {
-        getline(file, line);
-        if (file.eof()) {
+      for (int i = 0; i < chunk; i++) {
+        if (!getline(file, line)) {
           fin = true;
           break;
         } else {
-          cout << "FileReader(" << i << ") State[" << file.eof() << "] " << line
-               << endl;
+          vtr.push_back(line);
+          cout << "FileReader(" << i << ") State " << vtr.size() << endl;
         }
       }
     }
@@ -90,23 +72,25 @@ _Task MyTask {
   bool end = false;
   int id;
   FileReader& reader;
+  std::vector<string> vc;
 
  private:
   void main() {
     cout << "INICIO TAREA " << id << endl;
-    while (!end) {
-      // Reanudar la corrutina para leer el chunk
-      end = reader.next();
-      cout << "TAREA[" << id << "] ESTADO ARCHIVO["
-           << (end == 1 ? "FINALIZADO]" : "EN CURSO]") << endl;
+    while (!reader.finish()) {
+      vc = reader.next();
+      cout << "TAMAÑO VECTOR " << (vc.size() == 0 ? "VACIO" : vc[0]) << endl;
+      // cout << "TAREA[" << vc.size() << " O.O" << id << "] ESTADO ARCHIVO["
+      //      << (reader.finish() == 1 ? "FINALIZADO]" : "EN CURSO]") << endl;
+      reader.vtr.clear();
     }
     cout << "Fin Tarea(" << id << ")" << endl;
   }
 };
 int main(int argc, char* argv[]) {
   // Variables para almacenar los argumentos
-  std::string inputFileName;
-  std::string outputFileName;
+  string inputFileName;
+  string outputFileName;
   double deltau = 0.0;
   int N = 0;
   int chunkSize = 0;
@@ -123,31 +107,30 @@ int main(int argc, char* argv[]) {
         outputFileName = optarg;
         break;
       case 'd':
-        deltau = std::stod(optarg);
+        deltau = stod(optarg);
         break;
       case 'N':
-        N = std::stoi(optarg);
+        N = stoi(optarg);
         break;
       case 'c':
-        chunkSize = std::stoi(optarg);
+        chunkSize = stoi(optarg);
         break;
       case 't':
-        t = std::stoi(optarg);
+        t = stoi(optarg);
         break;
       default:
-        std::cerr
-            << "Uso: " << argv[0]
-            << " -i input -o output -d deltau -N tamaño -c chunk -t tareas"
-            << std::endl;
+        cerr << "Uso: " << argv[0]
+             << " -i input -o output -d deltau -N tamaño -c chunk -t tareas"
+             << endl;
         return 1;
     }
   }
-  std::cout << "Input File: " << inputFileName << std::endl;
-  std::cout << "Output File: " << outputFileName << std::endl;
-  std::cout << "Deltau: " << deltau << std::endl;
-  std::cout << "Image Size: " << N << std::endl;
-  std::cout << "Chunk Size: " << chunkSize << std::endl;
-  std::cout << "Number of Tasks: " << t << std::endl;
+  cout << "Input File: " << inputFileName << endl;
+  cout << "Output File: " << outputFileName << endl;
+  cout << "Deltau: " << deltau << endl;
+  cout << "Image Size: " << N << endl;
+  cout << "Chunk Size: " << chunkSize << endl;
+  cout << "Number of Tasks: " << t << endl;
 
   float *fr, *fi, *wt;
   fr = new float[N * N];
