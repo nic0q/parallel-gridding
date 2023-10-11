@@ -10,13 +10,12 @@
 #include <vector>
 using namespace std;
 const double speed_of_light = 2.998 * 1e8;
-// n° lineas: 3196373
+// n° lineas: 3.196.373
 _Cormonitor FileReader {
  public:
   FileReader(string & filename, int chunkSize) : chunk(chunkSize) {
     file.open(filename.c_str());
   }
-
   ~FileReader() { file.close(); }
   void write_file(vector<double> vc, int size, string& file) {
     FILE* outputFile = fopen(file.c_str(), "wb");
@@ -48,15 +47,12 @@ _Cormonitor FileReader {
 
   void main() {
     string line;
-    while (true) {
+    for (;;) {
       for (int i = 0; i < chunk; i++) {  // Reading X lines of chunk
         if (!getline(file, line)) {
           break;
         } else {
           vtr.push_back(line);
-          if (n_line % 1000 == 0) {
-            cout << "Line\t" << line << endl;
-          }
           n_line += 1;
         }
       }
@@ -76,16 +72,13 @@ _Task MyTask {
 
   int id;
   int N;
+  int arg = 3;
   double deltaX;
-  vector<double> fr;
-  vector<double> fi;
-  vector<double> wt;
+
   FileReader& reader;
+  bool isDone = false;
   vector<string> vc;
-
- private:
   double arc_sec_to_rad(double deg) { return deg * M_PI / (180 * 3600); }
-
   vector<double> str_to_vec(string str) {
     stringstream ss(str);
     vector<double> vis;
@@ -96,14 +89,21 @@ _Task MyTask {
     }
     return vis;
   }
+  vector<double> get_fr() { return fr; }
+  vector<double> get_fi() { return fi; }
+  vector<double> get_wt() { return wt; }
 
+ protected:
+  vector<double> fr;
+  vector<double> fi;
+  vector<double> wt;
   void main() {
-    double time;
     cout << "Start Task(" << id << ")" << endl;
-    while (!reader.is_done()) {
-      if (reader.n_line % 1000 == 0) {
-        cout << "Task:\t" << id << "\tLine:\t" << reader.n_line;
+    while (!isDone) {
+      if (reader.n_line % 10000 == 0) {
+        cout << "Task:\t" << id << "\tLine:\t" << reader.n_line << endl;
       }
+      isDone = reader.is_done();
       vc = reader.next();
       vector<double> vis;  // string vector
       for (int i = 0; i < vc.size(); i++) {
@@ -135,7 +135,7 @@ _Task MyTask {
     cout << "End Task(" << id << ")" << endl;
   }
 };
-int main(int argc, char* argv[]) {
+void uMain::main() {
   string input_file_name;
   string output_file_name;
   double deltaX = 0.0, tp = 0.0, time;
@@ -169,7 +169,6 @@ int main(int argc, char* argv[]) {
              << " -i input -o output -d deltaX -N tamaño -c chunk -t "
                 "tareas"
              << endl;
-        return 1;
     }
   }
   cout << "Input File: " << input_file_name << endl;
@@ -179,36 +178,32 @@ int main(int argc, char* argv[]) {
   cout << "Chunk Size: " << c << endl;
   cout << "Number of Tasks: " << t << endl;
 
-  vector<double> fr;
-  vector<double> fi;
-  vector<double> wt;
+  vector<double> fr(N * N);
+  vector<double> fi(N * N);
+  vector<double> wt(N * N);
 
   FileReader reader(input_file_name, c);  // Comonitor object creation
   MyTask** tasks = new MyTask*[t];        // Array of tasks
 
-  t0 = clock();
   for (int i = 0; i < t; i++) {
     tasks[i] = new MyTask(i, N, deltaX, reader);  // Allocation
   }
-  t1 = clock();
-  time = double(t1 - t0) / CLOCKS_PER_SEC;
-  cout << "TIEMPO " << time << endl;
-
-  fr = tasks[0]->fr;
-  fi = tasks[0]->fi;
-  wt = tasks[0]->wt;
-
-  for (int i = 0; i < N * N; i++) {
-    if (wt[i] != 0) {
-      fr[i] = fr[i] / wt[i];
-      fi[i] = fi[i] / wt[i];
-    }
-  }
-
   for (int i = 0; i < t; i++) {
+    for (int j = 0; j < N; j++) {
+      for (int k = 0; k < N; k++) {
+        fr[j * N + k] += tasks[i]->get_fr()[j * N + k];  // r
+        fi[j * N + k] += tasks[i]->get_fi()[j * N + k];  // i
+        wt[j * N + k] += tasks[i]->get_wt()[j * N + k];  // w
+      }
+    }
     delete tasks[i];
   }
-
+  for (int j = 0; j < N; j++) {
+    for (int k = 0; k < N; k++) {
+      fr[j * N + k] = fr[j * N + k] / wt[j * N + k];  // r
+      fi[j * N + k] = fi[j * N + k] / wt[j * N + k];  // i
+    }
+  }
   string r_file = output_file_name + "r.raw";
   string i_file = output_file_name + "i.raw";
 
@@ -216,5 +211,4 @@ int main(int argc, char* argv[]) {
   reader.write_file(fi, N * N, i_file);
 
   delete[] tasks;
-  return 0;
 }
