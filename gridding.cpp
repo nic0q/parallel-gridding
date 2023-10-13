@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <time.h>
 #include <uC++.h>
 
 #include <cmath>
@@ -123,12 +124,13 @@ _Task MyTask {
 
         deltaU = 1 / (N * deg_to_rad(deltaX));  // to radians
         deltaV = deltaU;  // asuming deltav is equals to deltau
+
         ik = round((uk / deltaU) + (N / 2));
         jk = round((vk / deltaV) + (N / 2));
 
-        fr[ik * N + jk] = fr[ik * N + jk] + (wk * vr);
-        fi[ik * N + jk] = fi[ik * N + jk] + (wk * vi);
-        wt[ik * N + jk] = wt[ik * N + jk] + wk;
+        fr[ik * N + jk] += (wk * vr);
+        fi[ik * N + jk] += (wk * vi);
+        wt[ik * N + jk] += wk;
       }
     }
     cout << "Fin Tarea(" << id << ")" << endl;
@@ -138,6 +140,8 @@ void uMain::main() {
   string input_file_name;
   string output_file_name;
   float deltaX = 0.0;
+  double tp = 0.0, time;
+  unsigned t0, t1;
   int N = 0;
   int c = 0;
   int t = 0;
@@ -183,6 +187,7 @@ void uMain::main() {
   FileReader reader(input_file_name, c);  // Comonitor object creation
   MyTask* tasks[t];                       // Array of tasks
 
+  t0 = clock();
   for (int i = 0; i < t; i++) {
     tasks[i] = new MyTask(i, N, deltaX, reader);  // Allocation
   }
@@ -200,9 +205,14 @@ void uMain::main() {
       fi[k] = fi[k] / wt[k];
     }
   }
+  t1 = clock();
+  time = double(t1 - t0) / CLOCKS_PER_SEC;
+
   string r_file_name = output_file_name + "r.raw";
   string i_file_name = output_file_name + "i.raw";
 
   reader.write_file(fr, N * N, r_file_name);
   reader.write_file(fi, N * N, i_file_name);
+
+  cout << time << "[s]" << endl;
 }
