@@ -8,21 +8,21 @@
 #include <string>
 #include <vector>
 using namespace std;
-const double speed_of_light = 2.998 * 1e8;
+const float speed_of_light = 2.998 * 1e8;
 
 _Cormonitor FileReader {
  public:
   FileReader(string & filename, int chunkSize) : chunk(chunkSize) {
     file.open(filename.c_str());
   }
-
   ~FileReader() { file.close(); }
-  void write_file(vector<double> vc, int size, string& file) {
+
+  void write_file(vector<float> vc, int size, string& file) {
     FILE* outputFile = fopen(file.c_str(), "wb");
     if (!outputFile) {
       cerr << "Error al abrir el archivo: " << file << endl;
     }
-    if (fwrite(vc.data(), sizeof(double), size, outputFile) == size) {
+    if (fwrite(vc.data(), sizeof(float), size, outputFile) == size) {
       cout << "All elements were written successfully" << endl;
     } else {
       cout << "There was an error while writing the elements" << endl;
@@ -36,74 +36,81 @@ _Cormonitor FileReader {
 
   bool is_done() { return file.eof(); }
 
-  void clean_vtr() { vtr.clear(); }
-
-  vector<string> vtr;
-
  private:
   ifstream file;
   int chunk;
   int n_line = 0;
+  vector<string> vtr;
 
   void main() {
     string line;
-    while (true) {
-      suspend();
+    for (;;) {
+      vector<string> temp(chunk);
       for (int i = 0; i < chunk; i++) {  // Reading X lines of chunk
         if (!getline(file, line)) {
           break;
         } else {
           vtr.push_back(line);
-          cout << "read " << n_line << endl;
+          if (n_line % 100000 == 0) {
+            cout << "reading line: " << n_line << endl;
+          }
           n_line += 1;
         }
       }
+      suspend();
+      vtr.clear();
     }
   }
 };
 
 _Task MyTask {
  public:
-  MyTask(int id, int N, double deltaX, FileReader& reader)
+  MyTask(int id, int N, float deltaX, FileReader& reader)
       : id(id), N(N), deltaX(deltaX), reader(reader) {
-    fr.resize(N * N, 2);
+    fr.resize(N * N, 0);
     fi.resize(N * N, 0);
     wt.resize(N * N, 0);
   }
+  ~MyTask() {
+    fr.clear();
+    fi.clear();
+    wt.clear();
+  }
+  vector<float> get_real_matrix() { return fr; }
+  vector<float> get_imaginary_matrix() { return fi; }
+  vector<float> get_w_matrix() { return wt; }
 
   int id;
-  int a = 3;
   int N;
-  double deltaX;
-  vector<double> fr;
-  vector<double> fi;
-  vector<double> wt;
+  float deltaX;
+  vector<float> fr;
+  vector<float> fi;
+  vector<float> wt;
   FileReader& reader;
   vector<string> vc;
 
  private:
-  double deg_to_rad(double deg) { return deg * M_PI / (180 * 3600); }
+  float deg_to_rad(float deg) { return deg * M_PI / (180 * 3600); }
 
-  vector<double> str_to_vec(string str) {
+  vector<float> str_to_vec(string str) {
     stringstream ss(str);
-    vector<double> vis;
+    vector<float> vis;
     while (ss.good()) {
       string substr;
       getline(ss, substr, ',');
-      vis.push_back(stod(substr));
+      vis.push_back(stof(substr));
     }
     return vis;
   }
 
   void main() {
     cout << "Start(" << id << ")" << endl;
-    double uk, vk, vr, vi, wk, f, deltaU, deltaV, ik, jk;
+    float uk, vk, vr, vi, wk, f, deltaU, deltaV, ik, jk;
     while (!reader.is_done()) {
       vc = reader.next();
-      vector<double> vis;  // string vector
-      cout << "Task(" << id << ")" << endl;
+      vector<float> vis;  // string vector
       for (int i = 0; i < vc.size(); i++) {
-        vis = str_to_vec(vc[i]);  // double vector
+        vis = str_to_vec(vc[i]);  // float vector
         uk = vis[0];
         vk = vis[1];
         vr = vis[3];
@@ -115,17 +122,14 @@ _Task MyTask {
         vk = vk * (f / speed_of_light);  // to wave longitude
 
         deltaU = 1 / (N * deg_to_rad(deltaX));  // to radians
-
         deltaV = deltaU;  // asuming deltav is equals to deltau
         ik = round((uk / deltaU) + (N / 2));
         jk = round((vk / deltaV) + (N / 2));
-        cout << "uk: " << uk << " vk: " << vk << " vr: " << vr << " vi: " << vi
-             << " wk: " << wk << " | ik(" << ik << ") jk(" << jk << ")" << endl;
-        // fr[ik * N + jk] = fr[ik * N + jk] + (wk * vr);
-        // fi[ik * N + jk] = fi[ik * N + jk] + (wk * vi);
-        // wt[ik * N + jk] = wt[ik * N + jk] + wk;
+
+        fr[ik * N + jk] = fr[ik * N + jk] + (wk * vr);
+        fi[ik * N + jk] = fi[ik * N + jk] + (wk * vi);
+        wt[ik * N + jk] = wt[ik * N + jk] + wk;
       }
-      reader.vtr.clear();
     }
     cout << "Fin Tarea(" << id << ")" << endl;
   }
@@ -133,7 +137,7 @@ _Task MyTask {
 void uMain::main() {
   string input_file_name;
   string output_file_name;
-  double deltaX = 0.0;
+  float deltaX = 0.0;
   int N = 0;
   int c = 0;
   int t = 0;
@@ -147,7 +151,7 @@ void uMain::main() {
         output_file_name = optarg;
         break;
       case 'd':
-        deltaX = stod(optarg);
+        deltaX = stof(optarg);
         break;
       case 'N':
         N = stoi(optarg);
@@ -172,9 +176,9 @@ void uMain::main() {
   cout << "Chunk Size: " << c << endl;
   cout << "Number of Tasks: " << t << endl;
 
-  vector<double> fr;
-  vector<double> fi;
-  vector<double> wt;
+  vector<float> fr(N * N, 0);
+  vector<float> fi(N * N, 0);
+  vector<float> wt(N * N, 0);
 
   FileReader reader(input_file_name, c);  // Comonitor object creation
   MyTask* tasks[t];                       // Array of tasks
@@ -182,24 +186,23 @@ void uMain::main() {
   for (int i = 0; i < t; i++) {
     tasks[i] = new MyTask(i, N, deltaX, reader);  // Allocation
   }
-
   for (int i = 0; i < t; i++) {
+    for (int j = 0; j < N * N; j++) {
+      fr[j] += tasks[i]->fr[j];
+      fi[j] += tasks[i]->fi[j];
+      wt[j] += tasks[i]->wt[j];
+    }
     delete tasks[i];
   }
-
-  // fr = tasks[0]->fr;
-  // fi = tasks[0]->fi;
-  // wt = tasks[0]->wt;
-
-  // for (int i = 0; i < N * N; i++) {
-  //   if (wt[i] != 0) {
-  //     fr[i] = fr[i] / wt[i];
-  //     fi[i] = fi[i] / wt[i];
-  //   }
-  // }
-  for (int i = 0; i < t; i++) {
-    cout << tasks[i]->a << endl;
+  for (int k = 0; k < N * N; k++) {
+    if (wt[k] != 0) {
+      fr[k] = fr[k] / wt[k];
+      fi[k] = fi[k] / wt[k];
+    }
   }
-  string r_file = output_file_name + "r.raw";
-  string i_file = output_file_name + "i.raw";
+  string r_file_name = output_file_name + "r.raw";
+  string i_file_name = output_file_name + "i.raw";
+
+  reader.write_file(fr, N * N, r_file_name);
+  reader.write_file(fi, N * N, i_file_name);
 }

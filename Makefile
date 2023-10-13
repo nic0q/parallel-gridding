@@ -1,7 +1,9 @@
+FLAGS = -Ofast # optimize the code
+
 all: gridding
 
 gridding: gridding.cpp
-	u++ -o gridding gridding.cpp
+	u++ $(FLAGS) -o gridding gridding.cpp
 
 clean:
 	rm -f *.o *.exe gridding datosgrideadosr.raw datosgrideadosi.raw
