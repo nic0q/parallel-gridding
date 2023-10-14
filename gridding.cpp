@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 using namespace std;
-const float speed_of_light = 2.998 * 1e8;
+const float speed_of_light = 299792458;  // m/s
 
 _Cormonitor FileReader {
  public:
@@ -77,9 +77,6 @@ _Task MyTask {
     fi.clear();
     wt.clear();
   }
-  vector<float> get_real_matrix() { return fr; }
-  vector<float> get_imaginary_matrix() { return fi; }
-  vector<float> get_w_matrix() { return wt; }
 
   int id;
   int N;
@@ -125,8 +122,8 @@ _Task MyTask {
         deltaU = 1 / (N * deg_to_rad(deltaX));  // to radians
         deltaV = deltaU;  // asuming deltav is equals to deltau
 
-        ik = round((uk / deltaU) + (N / 2));
-        jk = round((vk / deltaV) + (N / 2));
+        ik = round(uk / deltaU) + (N / 2);
+        jk = round(vk / deltaV) + (N / 2);
 
         fr[ik * N + jk] += (wk * vr);
         fi[ik * N + jk] += (wk * vi);
@@ -136,6 +133,7 @@ _Task MyTask {
     cout << "Fin Tarea(" << id << ")" << endl;
   }
 };
+
 void uMain::main() {
   string input_file_name;
   string output_file_name;
@@ -192,14 +190,14 @@ void uMain::main() {
     tasks[i] = new MyTask(i, N, deltaX, reader);  // Allocation
   }
   for (int i = 0; i < t; i++) {
-    for (int j = 0; j < N * N; j++) {
+    for (int j = 0; j < N * N; j++) {  // Acumulate in main matrix's fr, fi,
       fr[j] += tasks[i]->fr[j];
       fi[j] += tasks[i]->fi[j];
       wt[j] += tasks[i]->wt[j];
     }
-    delete tasks[i];
+    delete tasks[i];  // Task finalization
   }
-  for (int k = 0; k < N * N; k++) {
+  for (int k = 0; k < N * N; k++) {  // Weight normalization
     if (wt[k] != 0) {
       fr[k] = fr[k] / wt[k];
       fi[k] = fi[k] / wt[k];
