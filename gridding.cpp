@@ -18,6 +18,13 @@ _Cormonitor FileReader {
   }
   ~FileReader() { file.close(); }
 
+  vector<string> next() {
+    resume();
+    return vtr;
+  }
+
+  bool is_done() { return file.eof(); }
+
   void write_file(vector<float> vc, int size, string& file) {
     FILE* outputFile = fopen(file.c_str(), "wb");
     if (!outputFile) {
@@ -30,12 +37,6 @@ _Cormonitor FileReader {
     }
     fclose(outputFile);
   }
-  vector<string> next() {
-    resume();
-    return vtr;
-  }
-
-  bool is_done() { return file.eof(); }
 
  private:
   ifstream file;
@@ -46,17 +47,15 @@ _Cormonitor FileReader {
   void main() {
     string line;
     for (;;) {
-      vector<string> temp(chunk);
-      for (int i = 0; i < chunk; i++) {  // Reading X lines of chunk
-        if (!getline(file, line)) {
+      for (int i = 0; i < chunk; i++) {  // Reading X lines (chunk)
+        if (!getline(file, line)) {      // Reached end of file
           break;
-        } else {
-          vtr.push_back(line);
-          if (n_line % 100000 == 0) {
-            cout << "reading line: " << n_line << endl;
-          }
-          n_line += 1;
         }
+        if (n_line % 100000 == 0) {  // cout it visualization
+          cout << "reading line: " << n_line << endl;
+        }
+        vtr.push_back(line);
+        n_line += 1;
       }
       suspend();
       vtr.clear();
@@ -68,9 +67,9 @@ _Task MyTask {
  public:
   MyTask(int id, int N, float deltaX, FileReader& reader)
       : id(id), N(N), deltaX(deltaX), reader(reader) {
-    fr.resize(N * N, 0);
-    fi.resize(N * N, 0);
-    wt.resize(N * N, 0);
+    fr.resize(N * N, 0.0);
+    fi.resize(N * N, 0.0);
+    wt.resize(N * N, 0.0);
   }
   ~MyTask() {
     fr.clear();
@@ -88,7 +87,9 @@ _Task MyTask {
   vector<string> vc;
 
  private:
-  float deg_to_rad(float deg) { return deg * M_PI / (180 * 3600); }
+  float arcsec_to_rad(float deg) {  // arcseconds to radians
+    return deg * M_PI / (180 * 3600);
+  }
 
   vector<float> str_to_vec(string str) {
     stringstream ss(str);
@@ -102,11 +103,11 @@ _Task MyTask {
   }
 
   void main() {
-    cout << "Start(" << id << ")" << endl;
+    cout << "Starting Task(" << id << ")" << endl;
     float uk, vk, vr, vi, wk, f, deltaU, deltaV, ik, jk;
+    vector<float> vis;  // string vector
     while (!reader.is_done()) {
       vc = reader.next();
-      vector<float> vis;  // string vector
       for (int i = 0; i < vc.size(); i++) {
         vis = str_to_vec(vc[i]);  // float vector
         uk = vis[0];
@@ -119,31 +120,28 @@ _Task MyTask {
         uk = uk * (f / speed_of_light);  // to wave longitude
         vk = vk * (f / speed_of_light);  // to wave longitude
 
-        deltaU = 1 / (N * deg_to_rad(deltaX));  // to radians
+        deltaU = 1 / (N * arcsec_to_rad(deltaX));  // to radians
         deltaV = deltaU;  // asuming deltav is equals to deltau
 
-        ik = round(uk / deltaU) + (N / 2);
+        ik = round(uk / deltaU) + (N / 2);  // i,j grid
         jk = round(vk / deltaV) + (N / 2);
 
-        fr[ik * N + jk] += (wk * vr);
+        fr[ik * N + jk] += (wk * vr);  // acumulate in matrix fr, fi, wt
         fi[ik * N + jk] += (wk * vi);
         wt[ik * N + jk] += wk;
       }
     }
-    cout << "Fin Tarea(" << id << ")" << endl;
+    cout << "Ending Task(" << id << ")" << endl;
   }
 };
 
 void uMain::main() {
-  string input_file_name;
-  string output_file_name;
-  float deltaX = 0.0;
+  string input_file_name, output_file_name;
+  int option, N = 0, c = 0, t = 0;
   double tp = 0.0, time;
+  float deltaX = 0.0;
   unsigned t0, t1;
-  int N = 0;
-  int c = 0;
-  int t = 0;
-  int option;
+
   while ((option = getopt(argc, argv, "i:o:d:N:c:t:")) != -1) {
     switch (option) {
       case 'i':
@@ -183,24 +181,24 @@ void uMain::main() {
   vector<float> wt(N * N, 0);
 
   FileReader reader(input_file_name, c);  // Comonitor object creation
-  MyTask* tasks[t];                       // Array of tasks
+  MyTask* tasks[t];                       // Array of t tasks
 
   t0 = clock();
   for (int i = 0; i < t; i++) {
-    tasks[i] = new MyTask(i, N, deltaX, reader);  // Allocation
+    tasks[i] = new MyTask(i, N, deltaX, reader);  // Task creation
   }
   for (int i = 0; i < t; i++) {
-    for (int j = 0; j < N * N; j++) {  // Acumulate in main matrix's fr, fi,
+    for (int j = 0; j < N * N; j++) {  // Acumulate in main matrix's fr, fi, wt
       fr[j] += tasks[i]->fr[j];
       fi[j] += tasks[i]->fi[j];
       wt[j] += tasks[i]->wt[j];
     }
     delete tasks[i];  // Task finalization
   }
-  for (int k = 0; k < N * N; k++) {  // Weight normalization
-    if (wt[k] != 0) {
-      fr[k] = fr[k] / wt[k];
-      fi[k] = fi[k] / wt[k];
+  for (int i = 0; i < N * N; i++) {  // Weight normalization
+    if (wt[i] != 0) {
+      fr[i] = fr[i] / wt[i];
+      fi[i] = fi[i] / wt[i];
     }
   }
   t1 = clock();

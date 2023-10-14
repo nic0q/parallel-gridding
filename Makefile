@@ -7,7 +7,7 @@ all_2: gridding_2
 gridding: gridding.cpp
 	u++ $(FLAGS) -o gridding gridding.cpp
 
-gridding_2:
+gridding_2: gridding_2.cpp
 	u++ $(FLAGS) -o gridding_2 gridding_2.cpp
 
 test_grid:
