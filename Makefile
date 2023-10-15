@@ -1,26 +1,26 @@
 FLAGS = -Ofast # optimize the code
 
-all: gridding
+shared: gridding_shared_matrix
 
-all_2: gridding_2
+private: gridding_private_matrix
 
-gridding: gridding.cpp
-	u++ $(FLAGS) -o gridding gridding.cpp
+gridding_shared_matrix: gridding_shared.cpp
+	u++ $(FLAGS) -o gridding_shared gridding_shared.cpp
 
-gridding_2: gridding_2.cpp
-	u++ $(FLAGS) -o gridding_2 gridding_2.cpp
+gridding_private_matrix: gridding_private.cpp
+	u++ $(FLAGS) -o gridding_private gridding_private.cpp
 
-test_grid:
-	./gridding -i hltau_test.csv -o datosgrideados -d 0.003 -N 2048 -c 3 -t 5
+test:
+	./gridding_shared -i hltau_test.csv -o test -d 0.003 -N 2048 -c 3 -t 5
 
-test_gridding:
-	./gridding -i hltau_completo_uv.csv -o datosgrideados -d 0.003 -N 2048 -c 10 -t 10
+test_shared:
+	./gridding_shared -i hltau_completo_uv.csv -o datosgrideados2 -d 0.003 -N 2048 -c 10 -t 10
 
-test_2:
-	./gridding_2 -i hltau_completo_uv.csv -o datosgrideados2 -d 0.003 -N 2048 -c 10 -t 10
+test_private:
+	./gridding_private -i hltau_completo_uv.csv -o datosgrideados -d 0.003 -N 2048 -c 10 -t 10
 
 test_slurm:
 	sbatch gridding.slurm
 
 clean:
-	rm -f *.o *.exe gridding gridding_2 datosgrideadosr.raw datosgrideadosi.raw datosgrideados2r.raw datosgrideados2i.raw
+	rm -f *.o *.exe *. *.raw
