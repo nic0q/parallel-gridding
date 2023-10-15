@@ -7,4 +7,4 @@
 #SBATCH --error=job-gridding.err
 #SBATCH --cpus-per-task=64
 
-./gridding -i inputfle.txt -o outputfile.raw -h 64 -d arcsec
+./gridding_shared -i hltau_completo_uv.csv -o datosgrideados.raw -d 0.003 -N 2048 -c 3 -t 5
