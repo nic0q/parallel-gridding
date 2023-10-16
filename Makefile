@@ -23,4 +23,4 @@ test_slurm:
 	sbatch gridding.slurm
 
 clean:
-	rm -f *.o *.exe *. *.raw
+	rm -f *.o *.exe gridding_private gridding_shared
