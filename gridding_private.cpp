@@ -13,7 +13,7 @@ const float SPEED_OF_LIGHT = 299792458;  // m/s
 
 _Cormonitor FileReader {
  public:
-  FileReader(string & filename, int chunk) : chunk(chunk) {
+  FileReader(string & filename, int chunkSize) : chunk(chunkSize) {
     file.open(filename.c_str());
   }
   ~FileReader() { file.close(); }
@@ -25,12 +25,12 @@ _Cormonitor FileReader {
 
   bool is_done() { return file.eof(); }
 
-  void write_file(vector<float> vc, int size, string& file) {
+  void write_file(float* vc, int size, string& file) {
     FILE* outputFile = fopen(file.c_str(), "wb");
     if (!outputFile) {
       cerr << "Error al abrir el archivo: " << file << endl;
     }
-    if (fwrite(vc.data(), sizeof(float), size, outputFile) == size) {
+    if (fwrite(vc, sizeof(float), size, outputFile) == size) {
       cout << "All elements were written successfully" << endl;
     } else {
       cout << "There was an error while writing the elements" << endl;
@@ -40,7 +40,7 @@ _Cormonitor FileReader {
 
  private:
   ifstream file;
-  int chunk = 0;
+  int chunk;
   int n_line = 0;
   vector<string> vtr;
 
@@ -51,7 +51,7 @@ _Cormonitor FileReader {
         if (!getline(file, line)) {      // Reached end of file
           break;
         }
-        if (n_line % 100000 == 0) {  // cout it visualization
+        if (n_line % 500000 == 0) {  // cout each 500000 lines readed
           cout << "reading line: " << n_line << endl;
         }
         vtr.push_back(line);
@@ -62,51 +62,36 @@ _Cormonitor FileReader {
     }
   }
 };
-_Mutex class Mutex {
- public:
-  Mutex(int size) {
-    fr.resize(size, 0.0);
-    fi.resize(size, 0.0);
-    wt.resize(size, 0.0);
-  }
-  ~Mutex() {
-    fr.clear();
-    fi.clear();
-    wt.clear();
-  }
-  vector<float> fr;
-  vector<float> fi;
-  vector<float> wt;
-
-  void set_fr(float v, int pos) {  //
-    fr[pos] = fr[pos] + v;
-  }
-  void set_fi(float v, int pos) {  //
-    fi[pos] = fi[pos] + v;
-  }
-  void set_wt(float v, int pos) {  //
-    wt[pos] = wt[pos] + v;
-  }
-};
 
 _Task MyTask {
  public:
-  MyTask(int id, int N, float deltaX, FileReader& reader, Mutex& mutex)
-      : id(id), N(N), deltaX(deltaX), reader(reader), mutex(mutex) {}
-  ~MyTask() { vc.clear(); }
+  MyTask(int id, int N, float deltaX, FileReader& reader)
+      : id(id), N(N), deltaX(deltaX), reader(reader) {
+    this->fr = new float[N * N]();
+    this->fi = new float[N * N]();
+    this->wt = new float[N * N]();
+  }
+  ~MyTask() {
+    delete[] fr;
+    delete[] fi;
+    delete[] wt;
+  }
+
   int id;
   int N;
   float deltaX;
-  FileReader& reader;
+  float* fr;
+  float* fi;
+  float* wt;
   vector<string> vc;
-  Mutex& mutex;
+  FileReader& reader;
 
  private:
   float arcsec_to_rad(float deg) {  // arcseconds to radians
     return deg * M_PI / (180 * 3600);
   }
 
-  vector<float> str_to_vec(string str) {  // string vector to float
+  vector<float> str_to_vec(string str) {
     stringstream ss(str);
     vector<float> vis;
     while (ss.good()) {
@@ -138,12 +123,12 @@ _Task MyTask {
         deltaU = 1 / (N * arcsec_to_rad(deltaX));  // to radians
         deltaV = deltaU;  // asuming deltav is equals to deltau
 
-        ik = round(uk / deltaU) + (N / 2);  // i,j grid coordinate
+        ik = round(uk / deltaU) + (N / 2);  // i,j coordinate
         jk = round(vk / deltaV) + (N / 2);
 
-        mutex.set_fr(wk * vr, ik * N + jk);
-        mutex.set_fi(wk * vi, ik * N + jk);
-        mutex.set_wt(wk, ik * N + jk);
+        fr[(int)(ik * N + jk)] += (wk * vr);  // acumulate in matrix fr, fi, wt
+        fi[(int)(ik * N + jk)] += (wk * vi);
+        wt[(int)(ik * N + jk)] += wk;
       }
     }
     cout << "Ending Task(" << id << ")" << endl;
@@ -152,8 +137,8 @@ _Task MyTask {
 
 void uMain::main() {
   string input_file_name, output_file_name, r_file_name, i_file_name;
-  int option, N = 0, c = 0, t = 0;
-  double tp = 0.0, time;
+  int option, N = 0, c = 0, t = 0, dim = 0;
+  double tp = 0.0, time = 0.0;
   float deltaX = 0.0;
   unsigned t0, t1;
 
@@ -184,7 +169,7 @@ void uMain::main() {
              << endl;
     }
   }
-  cout << "--------- Private Matrix Method ---------" << endl;
+  cout << "--------- Private Matrices Method ---------" << endl;
   cout << "Input File: " << input_file_name << endl;
   cout << "Output File: " << output_file_name << endl;
   cout << "DeltaX: " << deltaX << endl;
@@ -192,26 +177,27 @@ void uMain::main() {
   cout << "Chunk Size: " << c << endl;
   cout << "Number of Tasks: " << t << endl;
 
-  vector<float> fr(N * N, 0);
-  vector<float> fi(N * N, 0);
-  vector<float> wt(N * N, 0);
-
+  dim = N * N;
   FileReader reader(input_file_name, c);  // Comonitor object creation
-  Mutex matrices(N * N);                  // Mutex
   MyTask* tasks[t];                       // Array of t tasks
+
+  float* fr = new float[dim]{};
+  float* fi = new float[dim]{};
+  float* wt = new float[dim]{};
 
   t0 = clock();
   for (int i = 0; i < t; i++) {
-    tasks[i] = new MyTask(i, N, deltaX, reader, matrices);  // Task creation
+    tasks[i] = new MyTask(i, N, deltaX, reader);  // Task creation
   }
   for (int i = 0; i < t; i++) {
+    for (int j = 0; j < dim; j++) {  // Acumulate in main matrix's fr, fi, wt
+      fr[j] += tasks[i]->fr[j];
+      fi[j] += tasks[i]->fi[j];
+      wt[j] += tasks[i]->wt[j];
+    }
     delete tasks[i];  // Task finalization
   }
-  fr = matrices.fr;
-  fi = matrices.fi;
-  wt = matrices.wt;
-
-  for (int i = 0; i < N * N; i++) {  // Weight normalization
+  for (int i = 0; i < dim; i++) {  // Weight normalization
     if (wt[i] != 0) {
       fr[i] = fr[i] / wt[i];
       fi[i] = fi[i] / wt[i];
@@ -223,8 +209,11 @@ void uMain::main() {
   r_file_name = output_file_name + "r.raw";  // Add file extension
   i_file_name = output_file_name + "i.raw";
 
-  reader.write_file(fr, N * N, r_file_name);  // Write gridding files
-  reader.write_file(fi, N * N, i_file_name);
+  reader.write_file(fr, dim, r_file_name);  // Write gridding files
+  reader.write_file(fi, dim, i_file_name);
 
-  cout << "Private Method time: " << time << "[s]" << endl;
+  delete[] fr;
+  delete[] fi;
+  delete[] wt;
+  cout << "Private Matrices Method time: " << time << "[s]" << endl;
 }

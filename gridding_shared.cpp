@@ -13,7 +13,7 @@ const float SPEED_OF_LIGHT = 299792458;  // m/s
 
 _Cormonitor FileReader {
  public:
-  FileReader(string & filename, int chunkSize) : chunk(chunkSize) {
+  FileReader(string & filename, int chunk) : chunk(chunk) {
     file.open(filename.c_str());
   }
   ~FileReader() { file.close(); }
@@ -25,12 +25,12 @@ _Cormonitor FileReader {
 
   bool is_done() { return file.eof(); }
 
-  void write_file(vector<float> vc, int size, string& file) {
+  void write_file(float* vc, int size, string& file) {
     FILE* outputFile = fopen(file.c_str(), "wb");
     if (!outputFile) {
       cerr << "Error al abrir el archivo: " << file << endl;
     }
-    if (fwrite(vc.data(), sizeof(float), size, outputFile) == size) {
+    if (fwrite(vc, sizeof(float), size, outputFile) == size) {
       cout << "All elements were written successfully" << endl;
     } else {
       cout << "There was an error while writing the elements" << endl;
@@ -40,7 +40,7 @@ _Cormonitor FileReader {
 
  private:
   ifstream file;
-  int chunk;
+  int chunk = 0;
   int n_line = 0;
   vector<string> vtr;
 
@@ -51,7 +51,7 @@ _Cormonitor FileReader {
         if (!getline(file, line)) {      // Reached end of file
           break;
         }
-        if (n_line % 100000 == 0) {  // cout it visualization
+        if (n_line % 500000 == 0) {  // cout each 500000 lines readed
           cout << "reading line: " << n_line << endl;
         }
         vtr.push_back(line);
@@ -62,36 +62,49 @@ _Cormonitor FileReader {
     }
   }
 };
+_Mutex class Mutex {
+ public:
+  Mutex(int size)
+      : fr(new float[size]{}),
+        fi(new float[size]{}),
+        wt(new float[size]{}) {}  // Initialize matrix with 0's
+  ~Mutex() {
+    delete[] fr;
+    delete[] fi;
+    delete[] wt;
+  }
+  float* fr;
+  float* fi;
+  float* wt;
+
+  float* get_fr() { return fr; }
+  float* get_fi() { return fi; }
+  float* get_wt() { return wt; }
+
+  void set_fr(float v, int pos) { fr[pos] += v; }
+  void set_fi(float v, int pos) { fi[pos] += v; }
+  void set_wt(float v, int pos) { wt[pos] += v; }
+};
 
 _Task MyTask {
  public:
-  MyTask(int id, int N, float deltaX, FileReader& reader)
-      : id(id), N(N), deltaX(deltaX), reader(reader) {
-    fr.resize(N * N, 0.0);
-    fi.resize(N * N, 0.0);
-    wt.resize(N * N, 0.0);
-  }
-  ~MyTask() {
-    fr.clear();
-    fi.clear();
-    wt.clear();
-  }
+  MyTask(int id, int N, float deltaX, FileReader& reader, Mutex& mutex)
+      : id(id), N(N), deltaX(deltaX), reader(reader), mutex(mutex) {}
+  ~MyTask() { vc.clear(); }
 
   int id;
   int N;
   float deltaX;
-  vector<float> fr;
-  vector<float> fi;
-  vector<float> wt;
-  vector<string> vc;
   FileReader& reader;
+  vector<string> vc;
+  Mutex& mutex;
 
  private:
   float arcsec_to_rad(float deg) {  // arcseconds to radians
     return deg * M_PI / (180 * 3600);
   }
 
-  vector<float> str_to_vec(string str) {
+  vector<float> str_to_vec(string str) {  // string vector to float
     stringstream ss(str);
     vector<float> vis;
     while (ss.good()) {
@@ -123,12 +136,12 @@ _Task MyTask {
         deltaU = 1 / (N * arcsec_to_rad(deltaX));  // to radians
         deltaV = deltaU;  // asuming deltav is equals to deltau
 
-        ik = round(uk / deltaU) + (N / 2);  // i,j coordinate
+        ik = round(uk / deltaU) + (N / 2);  // i,j grid coordinate
         jk = round(vk / deltaV) + (N / 2);
 
-        fr[ik * N + jk] += (wk * vr);  // acumulate in matrix fr, fi, wt
-        fi[ik * N + jk] += (wk * vi);
-        wt[ik * N + jk] += wk;
+        mutex.set_fr(wk * vr, ik * N + jk);  // acumulate with em
+        mutex.set_fi(wk * vi, ik * N + jk);
+        mutex.set_wt(wk, ik * N + jk);
       }
     }
     cout << "Ending Task(" << id << ")" << endl;
@@ -137,10 +150,11 @@ _Task MyTask {
 
 void uMain::main() {
   string input_file_name, output_file_name, r_file_name, i_file_name;
-  int option, N = 0, c = 0, t = 0;
-  double tp = 0.0, time;
+  int option, N = 0, c = 0, t = 0, dim = 0;
+  double tp = 0.0, time = 0.0;
   float deltaX = 0.0;
   unsigned t0, t1;
+  float *fr, *fi, *wt;
 
   while ((option = getopt(argc, argv, "i:o:d:N:c:t:")) != -1) {
     switch (option) {
@@ -177,26 +191,23 @@ void uMain::main() {
   cout << "Chunk Size: " << c << endl;
   cout << "Number of Tasks: " << t << endl;
 
-  vector<float> fr(N * N, 0);
-  vector<float> fi(N * N, 0);
-  vector<float> wt(N * N, 0);
-
+  dim = N * N;                            // Image dimension
   FileReader reader(input_file_name, c);  // Comonitor object creation
+  Mutex matrices(dim);                    // Mutex
   MyTask* tasks[t];                       // Array of t tasks
 
   t0 = clock();
-  for (int i = 0; i < t; i++) {
-    tasks[i] = new MyTask(i, N, deltaX, reader);  // Task creation
+  for (int i = 0; i < t; i++) {  // Task creation
+    tasks[i] = new MyTask(i, N, deltaX, reader, matrices);
   }
-  for (int i = 0; i < t; i++) {
-    for (int j = 0; j < N * N; j++) {  // Acumulate in main matrix's fr, fi, wt
-      fr[j] += tasks[i]->fr[j];
-      fi[j] += tasks[i]->fi[j];
-      wt[j] += tasks[i]->wt[j];
-    }
-    delete tasks[i];  // Task finalization
+  for (int i = 0; i < t; i++) {  // Task finalization
+    delete tasks[i];
   }
-  for (int i = 0; i < N * N; i++) {  // Weight normalization
+  fr = matrices.get_fr();
+  fi = matrices.get_fi();
+  wt = matrices.get_wt();
+
+  for (int i = 0; i < dim; i++) {  // Weight normalization
     if (wt[i] != 0) {
       fr[i] = fr[i] / wt[i];
       fi[i] = fi[i] / wt[i];
@@ -208,8 +219,8 @@ void uMain::main() {
   r_file_name = output_file_name + "r.raw";  // Add file extension
   i_file_name = output_file_name + "i.raw";
 
-  reader.write_file(fr, N * N, r_file_name);  // Write gridding files
-  reader.write_file(fi, N * N, i_file_name);
+  reader.write_file(fr, dim, r_file_name);  // Write gridding files
+  reader.write_file(fi, dim, i_file_name);
 
-  cout << "Shared Method time: " << time << "[s]" << endl;
+  cout << "Shared Matrix Method time: " << time << "[s]" << endl;
 }
