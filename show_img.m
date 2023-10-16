@@ -1,5 +1,5 @@
-f1 = fopen("datosgrideadosr.raw", "r");
-f2 = fopen("datosgrideadosi.raw", "r");
+f1 = fopen("datosgrideados2r.raw", "r");
+f2 = fopen("datosgrideados2i.raw", "r");
 
 s1 = fread(f1, "float");
 s2 = fread(f2, "float");
