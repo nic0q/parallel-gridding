@@ -23,7 +23,7 @@ _Cormonitor FileReader {
     return vtr;
   }
 
-  bool is_done() { return file.eof(); }
+  bool is_done() { return done; }
 
   void write_file(float* vc, int size, string& file) {
     FILE* outputFile = fopen(file.c_str(), "wb");
@@ -43,12 +43,14 @@ _Cormonitor FileReader {
   int chunk;
   int n_line = 0;
   vector<string> vtr;
+  bool done = false;
 
   void main() {
     string line;
     for (;;) {
       for (int i = 0; i < chunk; i++) {  // Reading X lines (chunk)
         if (!getline(file, line)) {      // Reached end of file
+          done = true;
           break;
         }
         if (n_line % 500000 == 0) {  // cout each 500000 lines readed
@@ -87,11 +89,11 @@ _Task MyTask {
   FileReader& reader;
 
  private:
-  float arcsec_to_rad(float deg) {  // arcseconds to radians
+  float arcsec_to_rad(float deg) const {  // arcseconds to radians
     return deg * M_PI / (180 * 3600);
   }
 
-  vector<float> str_to_vec(string str) {
+  vector<float> str_to_vec(string str) const {
     stringstream ss(str);
     vector<float> vis;
     while (ss.good()) {
@@ -104,8 +106,13 @@ _Task MyTask {
 
   void main() {
     cout << "Starting Task(" << id << ")" << endl;
-    float uk, vk, vr, vi, wk, fq, deltaU, deltaV, ik, jk;
-    vector<float> vis;  // string vector
+    int index;
+    float uk, vk, vr, vi, wk, fq, deltaU, deltaV, ik, jk, fqspeed;
+
+    vector<float> vis;                         // string vector
+    deltaU = 1 / (N * arcsec_to_rad(deltaX));  // to radians
+    deltaV = deltaU;  // asuming deltav is equals to deltau
+
     while (!reader.is_done()) {
       vc = reader.next();
       for (int i = 0; i < vc.size(); i++) {
@@ -117,18 +124,17 @@ _Task MyTask {
         wk = vis[5];
         fq = vis[6];
 
-        uk = uk * (fq / SPEED_OF_LIGHT);  // to wave longitude
-        vk = vk * (fq / SPEED_OF_LIGHT);  // to wave longitude
-
-        deltaU = 1 / (N * arcsec_to_rad(deltaX));  // to radians
-        deltaV = deltaU;  // asuming deltav is equals to deltau
+        fqspeed = fq / SPEED_OF_LIGHT;
+        uk = uk * fqspeed;  // to wave longitude
+        vk = vk * fqspeed;  // to wave longitude
 
         ik = round(uk / deltaU) + (N / 2);  // i,j coordinate
         jk = round(vk / deltaV) + (N / 2);
 
-        fr[(int)(ik * N + jk)] += (wk * vr);  // acumulate in matrix fr, fi, wt
-        fi[(int)(ik * N + jk)] += (wk * vi);
-        wt[(int)(ik * N + jk)] += wk;
+        index = ik * N + jk;
+        fr[index] += (wk * vr);  // acumulate in matrix fr, fi, wt
+        fi[index] += (wk * vi);
+        wt[index] += wk;
       }
     }
     cout << "Ending Task(" << id << ")" << endl;
@@ -215,5 +221,6 @@ void uMain::main() {
   delete[] fr;
   delete[] fi;
   delete[] wt;
+
   cout << "Private Matrices Method time: " << time << "[s]" << endl;
 }

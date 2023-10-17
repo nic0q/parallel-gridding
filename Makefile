@@ -1,4 +1,4 @@
-FLAGS = -Ofast # optimize the code
+	FLAGS = -Ofast # optimize the code
 
 shared: gridding_shared_matrix
 

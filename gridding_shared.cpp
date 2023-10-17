@@ -118,7 +118,11 @@ _Task MyTask {
   void main() {
     cout << "Starting Task(" << id << ")" << endl;
     float uk, vk, vr, vi, wk, fq, deltaU, deltaV, ik, jk;
-    vector<float> vis;  // string vector
+
+    vector<float> vis;                         // string vector
+    deltaU = 1 / (N * arcsec_to_rad(deltaX));  // to radians
+    deltaV = deltaU;  // asuming deltav is equals to deltau
+
     while (!reader.is_done()) {
       vc = reader.next();
       for (int i = 0; i < vc.size(); i++) {
@@ -132,9 +136,6 @@ _Task MyTask {
 
         uk = uk * (fq / SPEED_OF_LIGHT);  // to wave longitude
         vk = vk * (fq / SPEED_OF_LIGHT);  // to wave longitude
-
-        deltaU = 1 / (N * arcsec_to_rad(deltaX));  // to radians
-        deltaV = deltaU;  // asuming deltav is equals to deltau
 
         ik = round(uk / deltaU) + (N / 2);  // i,j grid coordinate
         jk = round(vk / deltaV) + (N / 2);
