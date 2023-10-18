@@ -23,34 +23,19 @@ _Cormonitor FileReader {
     return vtr;
   }
 
-  bool is_done() { return done; }
-
-  void write_file(float* vc, int size, string& file) {
-    FILE* outputFile = fopen(file.c_str(), "wb");
-    if (!outputFile) {
-      cerr << "Error al abrir el archivo: " << file << endl;
-    }
-    if (fwrite(vc, sizeof(float), size, outputFile) == size) {
-      cout << "All elements were written successfully" << endl;
-    } else {
-      cout << "There was an error while writing the elements" << endl;
-    }
-    fclose(outputFile);
-  }
+  bool is_done() { return file.eof(); }
 
  private:
   ifstream file;
-  int chunk;
+  int chunk = 0;
   int n_line = 0;
   vector<string> vtr;
-  bool done = false;
 
   void main() {
     string line;
     for (;;) {
       for (int i = 0; i < chunk; i++) {  // Reading X lines (chunk)
         if (!getline(file, line)) {      // Reached end of file
-          done = true;
           break;
         }
         if (n_line % 500000 == 0) {  // cout each 500000 lines readed
@@ -106,8 +91,8 @@ _Task MyTask {
 
   void main() {
     cout << "Starting Task(" << id << ")" << endl;
-    int index;
     float uk, vk, vr, vi, wk, fq, deltaU, deltaV, ik, jk, fqspeed;
+    int index;
 
     vector<float> vis;                         // string vector
     deltaU = 1 / (N * arcsec_to_rad(deltaX));  // to radians
@@ -132,6 +117,7 @@ _Task MyTask {
         jk = round(vk / deltaV) + (N / 2);
 
         index = ik * N + jk;
+
         fr[index] += (wk * vr);  // acumulate in matrix fr, fi, wt
         fi[index] += (wk * vi);
         wt[index] += wk;
@@ -140,6 +126,19 @@ _Task MyTask {
     cout << "Ending Task(" << id << ")" << endl;
   }
 };
+
+void write_file(float* vc, int size, string& file) {
+  FILE* outputFile = fopen(file.c_str(), "wb");
+  if (!outputFile) {
+    cerr << "Error al abrir el archivo: " << file << endl;
+  }
+  if (fwrite(vc, sizeof(float), size, outputFile) == size) {
+    cout << "All elements were written successfully" << endl;
+  } else {
+    cout << "There was an error while writing the elements" << endl;
+  }
+  fclose(outputFile);
+}
 
 void uMain::main() {
   string input_file_name, output_file_name, r_file_name, i_file_name;
@@ -215,8 +214,8 @@ void uMain::main() {
   r_file_name = output_file_name + "r.raw";  // Add file extension
   i_file_name = output_file_name + "i.raw";
 
-  reader.write_file(fr, dim, r_file_name);  // Write gridding files
-  reader.write_file(fi, dim, i_file_name);
+  write_file(fr, dim, r_file_name);  // Write gridding files
+  write_file(fi, dim, i_file_name);
 
   delete[] fr;
   delete[] fi;

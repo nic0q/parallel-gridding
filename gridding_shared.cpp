@@ -25,19 +25,6 @@ _Cormonitor FileReader {
 
   bool is_done() { return file.eof(); }
 
-  void write_file(float* vc, int size, string& file) {
-    FILE* outputFile = fopen(file.c_str(), "wb");
-    if (!outputFile) {
-      cerr << "Error al abrir el archivo: " << file << endl;
-    }
-    if (fwrite(vc, sizeof(float), size, outputFile) == size) {
-      cout << "All elements were written successfully" << endl;
-    } else {
-      cout << "There was an error while writing the elements" << endl;
-    }
-    fclose(outputFile);
-  }
-
  private:
   ifstream file;
   int chunk = 0;
@@ -117,7 +104,8 @@ _Task MyTask {
 
   void main() {
     cout << "Starting Task(" << id << ")" << endl;
-    float uk, vk, vr, vi, wk, fq, deltaU, deltaV, ik, jk;
+    float uk, vk, vr, vi, wk, fq, deltaU, deltaV, ik, jk, fqspeed;
+    int index;
 
     vector<float> vis;                         // string vector
     deltaU = 1 / (N * arcsec_to_rad(deltaX));  // to radians
@@ -134,20 +122,36 @@ _Task MyTask {
         wk = vis[5];
         fq = vis[6];
 
-        uk = uk * (fq / SPEED_OF_LIGHT);  // to wave longitude
-        vk = vk * (fq / SPEED_OF_LIGHT);  // to wave longitude
+        fqspeed = fq / SPEED_OF_LIGHT;
+        uk = uk * fqspeed;  // to wave longitude
+        vk = vk * fqspeed;  // to wave longitude
 
         ik = round(uk / deltaU) + (N / 2);  // i,j grid coordinate
         jk = round(vk / deltaV) + (N / 2);
 
-        mutex.set_fr(wk * vr, ik * N + jk);  // acumulate with em
-        mutex.set_fi(wk * vi, ik * N + jk);
-        mutex.set_wt(wk, ik * N + jk);
+        index = ik * N + jk;
+
+        mutex.set_fr(wk * vr, index);  // acumulate with em
+        mutex.set_fi(wk * vi, index);
+        mutex.set_wt(wk, index);
       }
     }
     cout << "Ending Task(" << id << ")" << endl;
   }
 };
+
+void write_file(float* vc, int size, string& file) {
+  FILE* outputFile = fopen(file.c_str(), "wb");
+  if (!outputFile) {
+    cerr << "Error al abrir el archivo: " << file << endl;
+  }
+  if (fwrite(vc, sizeof(float), size, outputFile) == size) {
+    cout << "All elements were written successfully" << endl;
+  } else {
+    cout << "There was an error while writing the elements" << endl;
+  }
+  fclose(outputFile);
+}
 
 void uMain::main() {
   string input_file_name, output_file_name, r_file_name, i_file_name;
@@ -220,8 +224,8 @@ void uMain::main() {
   r_file_name = output_file_name + "r.raw";  // Add file extension
   i_file_name = output_file_name + "i.raw";
 
-  reader.write_file(fr, dim, r_file_name);  // Write gridding files
-  reader.write_file(fi, dim, i_file_name);
+  write_file(fr, dim, r_file_name);  // Write gridding files
+  write_file(fi, dim, i_file_name);
 
   cout << "Shared Matrix Method time: " << time << "[s]" << endl;
 }
